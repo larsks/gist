@@ -16,12 +16,25 @@ def parse_args():
             action='store_true',
             default=False)
     p.add_argument('--description', '-d')
-    p.add_argument('--login', '-L', action='store_true')
-    p.add_argument('--logout', '-O', action='store_true')
+    p.add_argument('--info', '-I',
+        action='store_const',
+        const='info',
+        dest='mode')
+    p.add_argument('--login', '-L',
+        action='store_const',
+        const='login',
+        dest='mode')
+    p.add_argument('--logout', '-O',
+        action='store_const',
+        const='logout',
+        dest='mode')
     p.add_argument('--anonymous', '-a', action='store_true')
     p.add_argument('--credentials', '-C',
             default=os.path.join(os.environ['HOME'], '.github_oauth_token'))
     p.add_argument('files', nargs='*')
+
+    p.set_defaults(mode='gist')
+
     return p.parse_args()
 
 def cmd_gist(opts):
@@ -88,13 +101,40 @@ def cmd_logout(opts):
     os.unlink(opts.credentials)
     print 'You are logged out.'
 
+def cmd_info(opts):
+    headers = {}
+
+    if not os.path.isfile(opts.credentials):
+        print 'No credentials.'
+        return
+
+    with open(opts.credentials) as fd:
+        token = fd.read()
+        if not token:
+            print 'No credentials.'
+            return
+
+    headers['Authorization'] = 'token %s' % token
+    r = requests.get(
+            '%s/user' % github_api_endpoint,
+            headers=headers)
+
+    d = json.loads(r.text)
+
+    if d['login']:
+        print 'Logged in as %(login)s.' % d
+    else:
+        print 'Not logged in.'
+
 def main():
     opts = parse_args()
 
-    if opts.login:
+    if opts.mode == 'login':
         cmd_login(opts)
-    elif opts.logout:
+    elif opts.mode == 'logout':
         cmd_logout(opts)
+    elif opts.mode == 'info':
+        cmd_info(opts)
     else:
         cmd_gist(opts)
 
