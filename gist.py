@@ -8,11 +8,14 @@ import logging
 import os
 import subprocess
 import sys
+import urlparse
+
 
 LOG = logging.getLogger('gist')
 
 args = None
 cfg = None
+app_name = 'com.oddbit.gist'
 default_config_file = os.path.join(os.environ['HOME'],
                                    '.github')
 
@@ -65,13 +68,13 @@ def do_github_login():
         gu = gh.get_user()
 
         for auth in gu.get_authorizations():
-            if auth.note == 'com.oddbit.gist':
+            if auth.note == app_name:
                 LOG.warn('using existing authentication token %s (%s)',
                          auth.id, auth.note)
                 break
         else:
             auth = gu.create_authorization(scopes=['gist'],
-                                           note='com.oddbit.gist')
+                                           note=app_name)
             LOG.warn('created new authentication token %s (%s)',
                      auth.id, auth.note)
     except github.BadCredentialsException:
@@ -117,33 +120,51 @@ def do_create_gist():
             'Failed to create gist (authentication failed). '
             'Try logging in with --login.')
     else:
+        print gist.html_url
+
         if args.clone:
+            LOG.info('cloning gist %s into local repository',
+                     gist.id)
             subprocess.call([
                 'git', 'clone',
-                gist.git_pull_url])
-        else:
-            print gist.html_url
+                gist.git_pull_url,
+                'gist-%s' % gist.id])
 
+            if args.ssh:
+                LOG.info('configuring remote origin to use ssh for push')
+                push_url = urlparse.urlparse(gist.git_push_url)
+                ssh_url = 'git@%s:%s' % (
+                    push_url.netloc, push_url.path)
+                os.chdir('gist-%s' % gist.id)
+                subprocess.call([
+                    'git', 'remote', 'set-url',
+                    '--push', 'origin', ssh_url])
 
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument('--config', '-f',
                    default=default_config_file)
-    p.add_argument('--login', '-l',
-                   action='store_true')
-    p.add_argument('--user', '-u')
-    p.add_argument('--password', '--pass', '-p')
     p.add_argument('--clone', '-c',
                    action='store_true')
     p.add_argument('--private', '-P',
                    action='store_true')
     p.add_argument('--description', '-d')
     p.add_argument('--filename', '-n')
-    p.add_argument('--verbose', '-v',
+    p.add_argument('--ssh', '-s',
+                   action='store_true')
+
+    g = p.add_argument_group('Authentication options')
+    g.add_argument('--login', '-l',
+                   action='store_true')
+    g.add_argument('--user', '-u')
+    g.add_argument('--password', '--pass', '-p')
+
+    g = p.add_argument_group('Logging options')
+    g.add_argument('--verbose', '-v',
                    action='store_const',
                    const=logging.INFO,
                    dest='loglevel')
-    p.add_argument('--debug',
+    g.add_argument('--debug',
                    action='store_const',
                    const=logging.DEBUG,
                    dest='loglevel')
