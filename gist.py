@@ -126,7 +126,7 @@ def do_create_gist():
             LOG.info('cloning gist %s into local repository',
                      gist.id)
             subprocess.call([
-                'git', 'clone',
+                'git', 'clone', '-q',
                 gist.git_pull_url,
                 'gist-%s' % gist.id])
 
